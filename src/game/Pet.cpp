@@ -37,7 +37,7 @@ m_petCounter(0), m_PetScalingData(NULL), m_createSpellID(0),m_HappinessState(0),
 m_declinedname(NULL)
 {
     SetName("Pet");
-    m_regenTimer = 2000;
+    m_regenTimer = REGEN_TIME_FULL;
 
     m_baseBonusData = new PetScalingData;
 
@@ -206,7 +206,8 @@ bool Pet::LoadPetFromDB( Player* owner, uint32 petentry, uint32 petnumber, bool 
     SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
     SetName(std::string(fields[8].GetCppString()));
     SetUInt32Value(UNIT_FIELD_PETEXPERIENCE, fields[5].GetUInt32());
-    m_charmInfo->SetState(fields[6].GetUInt32());
+    GetCharmInfo()->SetState(fields[6].GetUInt32());
+    GetCharmInfo()->SetState(CHARM_STATE_ACTION,ACTIONS_ENABLE);
 
 
     // reget for sure use real creature info selected for Pet at load/creating
@@ -2990,27 +2991,27 @@ void Pet::Regenerate(Powers power, uint32 diff)
             if (IsUnderLastManaUseEffect())
             {
                 // Mangos Updates Mana in intervals of 2s, which is correct
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * 2.00f;
+                addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_INTERRUPTED_FLAT_MODIFIER) *  ManaIncreaseRate * (float)REGEN_TIME_FULL/IN_MILLISECONDS;
             }
             else
             {
-                addvalue = GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * 2.00f;
+                addvalue += GetFloatValue(UNIT_FIELD_POWER_REGEN_FLAT_MODIFIER) * ManaIncreaseRate * (float)REGEN_TIME_FULL/IN_MILLISECONDS;
             }
             break;
         }
         case POWER_RAGE:                                    // Regenerate rage ?
         {
-            addvalue = -20 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS);
+            addvalue -= 20 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RAGE_LOSS);
             break;
         }
         case POWER_ENERGY:                                  // Regenerate energy (ghoul)
         {
-            addvalue = 20 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
+            addvalue += 20 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_ENERGY);
             break;
         }
         case POWER_FOCUS:                                   // Hunter pets
         {
-            addvalue = 10 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_FOCUS);
+            addvalue += 10 * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_FOCUS);
             break;
         }
 
@@ -3046,9 +3047,9 @@ void Pet::Regenerate(Powers power, uint32 diff)
     }
 
     // addvalue computed on a 2sec basis. => update to diff time
-    addvalue *= float(diff) / REGEN_TIME_FULL;
+    int32 _addvalue = ceil(addvalue * float(diff) / (float)REGEN_TIME_FULL);
 
-    curValue += int32(addvalue);
+    curValue += _addvalue;
 
     if (curValue < 0)
         curValue = 0;
