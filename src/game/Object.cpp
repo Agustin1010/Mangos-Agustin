@@ -700,16 +700,14 @@ bool Object::LoadValues(const char* data)
 {
     if(!m_uint32Values) _InitValues();
 
-    Tokens tokens = StrSplit(data, " ");
+    Tokens tokens(data, ' ');
 
     if (tokens.size() != m_valuesCount)
         return false;
 
-    Tokens::iterator iter;
-    int index;
-    for (iter = tokens.begin(), index = 0; index < m_valuesCount; ++iter, ++index)
+    for (uint16 index = 0; index < m_valuesCount; ++index)
     {
-        m_uint32Values[index] = atol((*iter).c_str());
+        m_uint32Values[index] = atol(tokens[index]);
     }
 
     return true;
@@ -1395,9 +1393,16 @@ void WorldObject::UpdateAllowedPositionZ(float x, float y, float &z) const
     {
         case TYPEID_UNIT:
         {
-            // anyway creature move to target if is in same x,y position
-            if (((Creature const*)this)->GetPositionX() == x && ((Creature const*)this)->GetPositionY() == y)
-                return;
+            Unit* pVictim = ((Creature const*)this)->getVictim();
+            if (pVictim)
+            {
+                // anyway creature move to victim if is in 2D melee attack distance (prevent some exploit bye cheaters)
+                if (GetDistance2d(x, y) <= ((Creature const*)this)->GetMeleeAttackDistance(pVictim))
+                    return;
+                // anyway creature move to victim for thinly Z distance (shun some VMAP wrong ground calculating)
+                if (fabs(GetPositionZ() - pVictim->GetPositionZ()) < 5.0f)
+                    return;
+            }
             // non fly unit don't must be in air
             // non swim unit must be at ground (mostly speedup, because it don't must be in water and water level check less fast
             if (!((Creature const*)this)->CanFly())

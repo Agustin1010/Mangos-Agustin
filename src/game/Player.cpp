@@ -187,7 +187,7 @@ void PlayerTaxi::InitTaxiNodesForLevel(uint32 race, uint32 chrClass, uint32 leve
 
 void PlayerTaxi::LoadTaxiMask(const char* data)
 {
-    Tokens tokens = StrSplit(data, " ");
+    Tokens tokens(data, ' ');
 
     int index;
     Tokens::iterator iter;
@@ -195,7 +195,7 @@ void PlayerTaxi::LoadTaxiMask(const char* data)
         (index < TaxiMaskSize) && (iter != tokens.end()); ++iter, ++index)
     {
         // load and set bits only for existing taxi nodes
-        m_taximask[index] = sTaxiNodesMask[index] & uint32(atol((*iter).c_str()));
+        m_taximask[index] = sTaxiNodesMask[index] & uint32(atol(*iter));
     }
 }
 
@@ -217,11 +217,11 @@ bool PlayerTaxi::LoadTaxiDestinationsFromString(const std::string& values, Team 
 {
     ClearTaxiDestinations();
 
-    Tokens tokens = StrSplit(values," ");
+    Tokens tokens(values, ' ');
 
     for(Tokens::iterator iter = tokens.begin(); iter != tokens.end(); ++iter)
     {
-        uint32 node = uint32(atol(iter->c_str()));
+        uint32 node = uint32(atol(*iter));
         AddTaxiDestination(node);
     }
 
@@ -1627,11 +1627,11 @@ bool Player::BuildEnumData( QueryResult * result, WorldPacket * p_data )
     }
 
 
-    Tokens data = StrSplit(fields[19].GetCppString(), " ");
+    Tokens data(fields[19].GetCppString(), ' ');
     for (uint8 slot = 0; slot < EQUIPMENT_SLOT_END; slot++)
     {
         uint32 visualbase = slot * 2;
-        uint32 item_id = GetUInt32ValueFromArray(data, visualbase);
+        uint32 item_id = atoi(data[visualbase]);
         const ItemPrototype * proto = ObjectMgr::GetItemPrototype(item_id);
         if(!proto)
         {
@@ -1643,7 +1643,7 @@ bool Player::BuildEnumData( QueryResult * result, WorldPacket * p_data )
 
         SpellItemEnchantmentEntry const *enchant = NULL;
 
-        uint32 enchants = GetUInt32ValueFromArray(data, visualbase + 1);
+        uint32 enchants = atoi(data[visualbase + 1]);
         for(uint8 enchantSlot = PERM_ENCHANTMENT_SLOT; enchantSlot <= TEMP_ENCHANTMENT_SLOT; ++enchantSlot)
         {
             // values stored in 2 uint16
@@ -3737,6 +3737,7 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
 
 void Player::RemoveSpellCooldown( uint32 spell_id, bool update /* = false */ )
 {
+    MAPLOCK_WRITE(this, MAP_LOCK_TYPE_DEFAULT);
     m_spellCooldowns.erase(spell_id);
 
     if (update)
@@ -3797,6 +3798,7 @@ void Player::RemoveAllSpellCooldown()
         for(SpellCooldowns::const_iterator itr = m_spellCooldowns.begin();itr != m_spellCooldowns.end(); ++itr)
             SendClearCooldown(itr->first, this);
 
+        MAPLOCK_WRITE(this, MAP_LOCK_TYPE_DEFAULT);
         m_spellCooldowns.clear();
     }
 }
@@ -3854,7 +3856,10 @@ void Player::_SaveSpellCooldowns()
     for(SpellCooldowns::iterator itr = m_spellCooldowns.begin();itr != m_spellCooldowns.end();)
     {
         if (itr->second.end <= curTime)
+        {
+            MAPLOCK_WRITE(this, MAP_LOCK_TYPE_DEFAULT);
             m_spellCooldowns.erase(itr++);
+        }
         else if (itr->second.end <= infTime)                 // not save locked cooldowns, it will be reset or set at reload
         {
             stmt = CharacterDatabase.CreateStatement(insertSpellCooldown, "INSERT INTO character_spell_cooldown (guid,spell,item,time) VALUES( ?, ?, ?, ?)");
@@ -16204,17 +16209,13 @@ void Player::_LoadIntoDataField(const char* data, uint32 startOffset, uint32 cou
     if(!data)
         return;
 
-    Tokens tokens = StrSplit(data, " ");
+    Tokens tokens(data, ' ', count);
 
     if (tokens.size() != count)
         return;
 
-    Tokens::iterator iter;
-    uint32 index;
-    for (iter = tokens.begin(), index = 0; index < count; ++iter, ++index)
-    {
-        m_uint32Values[startOffset + index] = atol((*iter).c_str());
-    }
+    for (uint32 index = 0; index < count; ++index)
+        m_uint32Values[startOffset + index] = atol(tokens[index]);
 }
 
 bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder *holder )
@@ -17221,11 +17222,11 @@ void Player::_LoadInventory(QueryResult *result, uint32 timediff)
                 else
                 {
                     Field* fields2 = result->Fetch();
-                    std::string guidsList = fields2[0].GetCppString();
-                    Tokens GUIDlist = StrSplit(guidsList, " ");
+                    std::string strGUID = fields2[0].GetCppString();
+                    Tokens GUIDlist(strGUID, ' ');
                     AllowedLooterSet looters;
                     for (Tokens::iterator itr = GUIDlist.begin(); itr != GUIDlist.end(); ++itr)
-                        looters.insert(atol(itr->c_str()));
+                        looters.insert(atol(*itr));
                     item->SetSoulboundTradeable(&looters, this, true);
                     m_itemSoulboundTradeable.push_back(item);
                 }
@@ -18090,7 +18091,7 @@ void Player::SendRaidInfo()
                 data << uint8((state->GetRealResetTime() > now) ? 1 : 0 );   // expired = 0
                 data << uint8(itr->second.extend ? 1 : 0);      // extended = 1
                 data << uint32(state->GetRealResetTime() > now ? state->GetRealResetTime() - now
-                    : DungeonResetScheduler::CalculateNextResetTime(GetMapDifficultyData(state->GetMapId(), state->GetDifficulty()), now));    // reset time
+                    : DungeonResetScheduler::CalculateNextResetTime(GetMapDifficultyData(state->GetMapId(), state->GetDifficulty())));    // reset time
                 ++counter;
             }
         }
@@ -20755,6 +20756,7 @@ void Player::AddSpellCooldown(uint32 spellid, uint32 itemid, time_t end_time)
     SpellCooldown sc;
     sc.end = end_time;
     sc.itemid = itemid;
+    MAPLOCK_WRITE(this, MAP_LOCK_TYPE_DEFAULT);
     m_spellCooldowns[spellid] = sc;
 }
 
