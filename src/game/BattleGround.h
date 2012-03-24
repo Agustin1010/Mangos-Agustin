@@ -208,7 +208,7 @@ enum ScoreType
     SCORE_TOWERS_ASSAULTED      = 13,
     SCORE_TOWERS_DEFENDED       = 14,
     SCORE_SECONDARY_OBJECTIVES  = 15,
-	/** World of Warcraft Armory **/
+    /** World of Warcraft Armory **/
     SCORE_DAMAGE_TAKEN = 16,
     SCORE_HEALING_TAKEN = 17,
     /** World of Warcraft Armory **/
@@ -291,7 +291,7 @@ class BattleGroundScore
     public:
         BattleGroundScore() : KillingBlows(0), Deaths(0), HonorableKills(0),
             BonusHonor(0), DamageDone(0), HealingDone(0)
-		/** World of Warcraft Armory **/
+        /** World of Warcraft Armory **/
         , DamageTaken(0), HealingTaken(0)
         /** World of Warcraft Armory **/
         {}

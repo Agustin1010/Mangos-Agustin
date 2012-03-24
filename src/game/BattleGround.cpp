@@ -858,7 +858,7 @@ void BattleGround::EndBattleGround(Team winner)
             DEBUG_LOG("--- Winner rating: %u, Loser rating: %u, Winner change: %i, Loser change: %i ---", winner_rating, loser_rating, winner_change, loser_change);
             SetArenaTeamRatingChangeForTeam(winner, winner_change);
             SetArenaTeamRatingChangeForTeam(GetOtherTeam(winner), loser_change);
-			/** World of Warcraft Armory **/
+            /** World of Warcraft Armory **/
             if (sWorld.getConfig(CONFIG_BOOL_ARMORY_SUPPORT))
             {
                 uint32 maxChartID;
@@ -1624,7 +1624,7 @@ void BattleGround::UpdatePlayerScore(Player *Source, uint32 type, uint32 value)
         case SCORE_HEALING_DONE:                            // Healing Done
             itr->second->HealingDone += value;
             break;
-		/** World of Warcraft Armory **/
+        /** World of Warcraft Armory **/
         case SCORE_DAMAGE_TAKEN:
             itr->second->DamageTaken += value; // Damage Taken
             break;

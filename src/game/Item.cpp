@@ -1124,7 +1124,7 @@ Item* Item::CreateItem( uint32 item, uint32 count, Player const* player, uint32 
         Item* pItem = NewItemOrBag(pProto);
         if (pItem->Create(sObjectMgr.GenerateItemLowGuid(), item, player))
         {
-			/** World of Warcraft Armory **/
+            /** World of Warcraft Armory **/
             if (sWorld.getConfig(CONFIG_BOOL_ARMORY_SUPPORT))
             {
                 if (pProto->Quality > 2 && pProto->Flags != 2048 && (pProto->Class == ITEM_CLASS_WEAPON || pProto->Class == ITEM_CLASS_ARMOR) && player)

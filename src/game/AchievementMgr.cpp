@@ -2363,8 +2363,7 @@ void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
     DETAIL_LOG("AchievementMgr::CompletedAchievement(%u)", achievement->ID);
     if(achievement->flags & ACHIEVEMENT_FLAG_COUNTER || m_completedAchievements.find(achievement->ID)!=m_completedAchievements.end())
         return;
-
-	    /** World of Warcraft Armory **/
+		/** World of Warcraft Armory **/
 		if (sWorld.getConfig(CONFIG_BOOL_ARMORY_SUPPORT))
 			GetPlayer()->WriteWowArmoryDatabaseLog(1, achievement->ID);
 		/** World of Warcraft Armory **/

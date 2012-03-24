@@ -18277,6 +18277,8 @@ void Player::SaveToDB()
     DEBUG_FILTER_LOG(LOG_FILTER_PLAYER_STATS, "The value of player %s at save: ", m_name.c_str());
     outDebugStatsValues();
 
+    CharacterDatabase.BeginTransaction();
+
 	/** World of Warcraft Armory **/
     if (sWorld.getConfig(CONFIG_BOOL_ARMORY_SUPPORT))
     {
@@ -18290,8 +18292,6 @@ void Player::SaveToDB()
         CharacterDatabase.Execute( ps.str().c_str() );
     }
     /** World of Warcraft Armory **/
-
-	CharacterDatabase.BeginTransaction();
 
     static SqlStatementID delChar ;
     static SqlStatementID insChar ;
