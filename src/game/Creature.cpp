@@ -35,6 +35,7 @@
 #include "MapManager.h"
 #include "CreatureAI.h"
 #include "CreatureAISelector.h"
+#include "CreatureEventAI.h"
 #include "Formulas.h"
 #include "WaypointMovementGenerator.h"
 #include "InstanceData.h"
@@ -511,7 +512,7 @@ void Creature::Update(uint32 update_diff, uint32 diff)
                 {
                     SetDeathState(JUST_DIED);
                     SetHealth(0);
-                    GetUnitStateMgr().InitDefaults();
+                    GetUnitStateMgr().InitDefaults(true);
                     clearUnitState(UNIT_STAT_ALL_STATE);
                     LoadCreatureAddon(true);
                 }
@@ -556,10 +557,10 @@ void Creature::Update(uint32 update_diff, uint32 diff)
                 m_corpseDecayTimer -= update_diff;
                 if (m_groupLootId)
                 {
-                    if (update_diff < m_groupLootTimer)
-                        m_groupLootTimer -= update_diff;
-                    else
+                    if (m_groupLootTimer <= update_diff)
                         StopGroupLoot();
+                    else
+                        m_groupLootTimer -= update_diff;
                 }
             }
             break;
@@ -1512,6 +1513,12 @@ float Creature::GetAttackDistance(Unit const* pl) const
     return (RetDistance*aggroRate);
 }
 
+float Creature::GetReachDistance(Unit const* unit) const
+{
+    //require realization of creature strategy (melee/spellcaster diffirent).
+    return GetAttackDistance(unit);
+}
+
 void Creature::SetDeathState(DeathState s)
 {
     if ((s == JUST_DIED && !m_isDeadByDefault) || (s == JUST_ALIVED && m_isDeadByDefault))
@@ -1537,9 +1544,7 @@ void Creature::SetDeathState(DeathState s)
             UpdateSpeed(MOVE_RUN, false);
         }
 
-        // FIXME: may not be blizzlike
-        if (Pet* pet = GetPet())
-            pet->Unsummon(PET_SAVE_AS_DELETED, this);
+        GetUnitStateMgr().InitDefaults(true);
 
         if (CanFly())
             GetMotionMaster()->MoveFall();
@@ -2619,3 +2624,48 @@ void Creature::SetLevitate(bool enable)
     data << GetPackGUID();
     SendMessageToSet(&data, true);
 }
+
+bool AttackResumeEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
+{
+    if (!m_owner.isAlive())
+        return true;
+
+    if (m_owner.hasUnitState(UNIT_STAT_CAN_NOT_REACT) || m_owner.HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED))
+        return true;
+
+    Unit* victim = m_owner.getVictim();
+
+    if (!victim || !victim->IsInMap(&m_owner))
+        return true;
+
+    switch(m_owner.GetObjectGuid().GetHigh())
+    {
+        case HIGHGUID_UNIT:
+        case HIGHGUID_VEHICLE:
+        {
+            m_owner.AttackStop(!b_force);
+            CreatureAI* ai = ((Creature*)&m_owner)->AI();
+            if (ai)
+            {
+            // Reset EventAI now unsafe, temp disabled (require correct writing EventAI scripts)
+            //    if (CreatureEventAI* eventai = (CreatureEventAI*)ai)
+            //        eventai->Reset();
+                ai->AttackStart(victim);
+            }
+            break;
+        }
+        case HIGHGUID_PET:
+        {
+            m_owner.AttackStop(!b_force);
+           ((Pet*)&m_owner)->AI()->AttackStart(victim);
+            break;
+        }
+        case HIGHGUID_PLAYER:
+            break;
+        default:
+            sLog.outError("AttackResumeEvent::Execute try execute for unsupported owner %s!", m_owner.GetObjectGuid().GetString().c_str());
+        break;
+    }
+    return true;
+}
+

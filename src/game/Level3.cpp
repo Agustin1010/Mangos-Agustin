@@ -270,10 +270,8 @@ bool ChatHandler::HandleReloadAllLootCommand(char* /*args*/)
     return true;
 }
 
-bool ChatHandler::HandleReloadAllNpcCommand(char* args)
+bool ChatHandler::HandleReloadAllNpcCommand(char* /*args*/)
 {
-    if (*args!='a')                                         // will be reloaded from all_gossips
-        HandleReloadNpcGossipCommand((char*)"a");
     HandleReloadNpcTrainerCommand((char*)"a");
     HandleReloadNpcVendorCommand((char*)"a");
     HandleReloadPointsOfInterestCommand((char*)"a");
@@ -347,7 +345,6 @@ bool ChatHandler::HandleReloadAllGossipsCommand(char* args)
     if (*args!='a')                                         // already reload from all_scripts
         HandleReloadGossipScriptsCommand((char*)"a");
     HandleReloadGossipMenuCommand((char*)"a");
-    HandleReloadNpcGossipCommand((char*)"a");
     HandleReloadPointsOfInterestCommand((char*)"a");
     return true;
 }
@@ -436,6 +433,14 @@ bool ChatHandler::HandleReloadCreatureQuestInvRelationsCommand(char* /*args*/)
     sLog.outString( "Loading Quests Relations... (`creature_involvedrelation`)" );
     sObjectMgr.LoadCreatureInvolvedRelations();
     SendGlobalSysMessage("DB table `creature_involvedrelation` (creature quest takers) reloaded.");
+    return true;
+}
+
+bool ChatHandler::HandleReloadConditionsCommand(char* /*args*/)
+{
+    sLog.outString( "Re-Loading `conditions`... " );
+    sObjectMgr.LoadConditions();
+    SendGlobalSysMessage("DB table `conditions` reloaded.");
     return true;
 }
 
@@ -615,14 +620,6 @@ bool ChatHandler::HandleReloadMangosStringCommand(char* /*args*/)
     sLog.outString( "Re-Loading mangos_string Table!" );
     sObjectMgr.LoadMangosStrings();
     SendGlobalSysMessage("DB table `mangos_string` reloaded.");
-    return true;
-}
-
-bool ChatHandler::HandleReloadNpcGossipCommand(char* /*args*/)
-{
-    sLog.outString( "Re-Loading `npc_gossip` Table!" );
-    sObjectMgr.LoadNpcGossips();
-    SendGlobalSysMessage("DB table `npc_gossip` reloaded.");
     return true;
 }
 
@@ -1277,7 +1274,7 @@ void ChatHandler::ShowAchievementCriteriaListHelper(AchievementCriteriaEntry con
         ss << GetMangosString(LANG_COUNTER);
     else
     {
-        ss << " [" << AchievementMgr::GetCriteriaProgressMaxCounter(criEntry) << "]";
+        ss << " [" << AchievementMgr::GetCriteriaProgressMaxCounter(criEntry, achEntry) << "]";
 
         if (target && target->GetAchievementMgr().IsCompletedCriteria(criEntry, achEntry))
             ss << GetMangosString(LANG_COMPLETE);
@@ -1357,7 +1354,9 @@ bool ChatHandler::HandleAchievementAddCommand(char* args)
             if (mgr.IsCompletedCriteria(*itr, achEntry))
                 continue;
 
-            uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(*itr);
+            uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(*itr, achEntry);
+            if (maxValue == std::numeric_limits<uint32>::max())
+                maxValue = 1;                               // Exception for counter like achievements, set them only to 1
             mgr.SetCriteriaProgress(*itr, achEntry, maxValue, AchievementMgr::PROGRESS_SET);
         }
     }
@@ -1432,7 +1431,9 @@ bool ChatHandler::HandleAchievementCriteriaAddCommand(char* args)
 
     LocaleConstant loc = GetSessionDbcLocale();
 
-    uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(criEntry);
+    uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(criEntry, achEntry);
+    if (maxValue == std::numeric_limits<uint32>::max())
+        maxValue = 1;                                       // Exception for counter like achievements, set them only to 1
 
     AchievementMgr& mgr = target->GetAchievementMgr();
 
@@ -1497,7 +1498,9 @@ bool ChatHandler::HandleAchievementCriteriaRemoveCommand(char* args)
 
     LocaleConstant loc = GetSessionDbcLocale();
 
-    uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(criEntry);
+    uint32 maxValue = AchievementMgr::GetCriteriaProgressMaxCounter(criEntry, achEntry);
+    if (maxValue == std::numeric_limits<uint32>::max())
+        maxValue = 1;                                       // Exception for counter like achievements, set them only to 1
 
     AchievementMgr& mgr = target->GetAchievementMgr();
 
@@ -3927,30 +3930,22 @@ bool ChatHandler::HandleDamageCommand(char* args)
     // melee damage by specific school
     if (!*args)
     {
-        uint32 absorb = 0;
-        uint32 resist = 0;
-
-        target->CalculateDamageAbsorbAndResist(m_session->GetPlayer(),schoolmask, SPELL_DIRECT_DAMAGE, damage, &absorb, &resist);
-
-        if (damage <= absorb + resist)
-            return true;
-
-        damage -= absorb + resist;
-
-        m_session->GetPlayer()->DealDamageMods(target,damage,&absorb);
-        m_session->GetPlayer()->DealDamage(target, damage, NULL, DIRECT_DAMAGE, schoolmask, NULL, false);
         DamageInfo damageInfo  = DamageInfo(m_session->GetPlayer(), target, spellid);
         damageInfo.damage      = damage;
-        damageInfo.absorb      = absorb;
-        damageInfo.resist      = resist;
+        damageInfo.absorb      = 0;
+        damageInfo.resist      = 0;
         damageInfo.HitInfo     = HITINFO_NORMALSWING2;
         damageInfo.TargetState = VICTIMSTATE_NORMAL;
+
+        target->CalculateDamageAbsorbAndResist(m_session->GetPlayer(),&damageInfo, false);
+
+        m_session->GetPlayer()->DealDamageMods(target, damageInfo.damage, &damageInfo.absorb);
+        m_session->GetPlayer()->DealDamage(target,&damageInfo,false);
         m_session->GetPlayer()->SendAttackStateUpdate(&damageInfo);
         return true;
     }
 
     // non-melee damage
-
 
     m_session->GetPlayer()->SpellNonMeleeDamageLog(target, spellid, damage);
     return true;
@@ -4412,7 +4407,7 @@ bool ChatHandler::HandleExploreCheatCommand(char* args)
             ChatHandler(chr).PSendSysMessage(LANG_YOURS_EXPLORE_SET_NOTHING,GetNameLink().c_str());
     }
 
-    for (uint8 i=0; i<PLAYER_EXPLORED_ZONES_SIZE; ++i)
+    for (uint8 i=0; i < PLAYER_EXPLORED_ZONES_SIZE; ++i)
     {
         if (flag != 0)
         {
@@ -4423,22 +4418,6 @@ bool ChatHandler::HandleExploreCheatCommand(char* args)
             m_session->GetPlayer()->SetFlag(PLAYER_EXPLORED_ZONES_1+i,0);
         }
     }
-
-    return true;
-}
-
-bool ChatHandler::HandleHoverCommand(char* args)
-{
-    uint32 flag;
-    if (!ExtractOptUInt32(&args, flag, 1))
-        return false;
-
-    m_session->GetPlayer()->SetHover(flag);
-
-    if (flag)
-        SendSysMessage(LANG_HOVER_ENABLED);
-    else
-        SendSysMessage(LANG_HOVER_DISABLED);
 
     return true;
 }
@@ -4584,7 +4563,7 @@ bool ChatHandler::HandleShowAreaCommand(char* args)
     int offset = area / 32;
     uint32 val = (uint32)(1 << (area % 32));
 
-    if(area<0 || offset >= PLAYER_EXPLORED_ZONES_SIZE)
+    if (area < 0 || offset >= PLAYER_EXPLORED_ZONES_SIZE)
     {
         SendSysMessage(LANG_BAD_VALUE);
         SetSentErrorMessage(true);
@@ -5145,6 +5124,7 @@ bool ChatHandler::HandleResetSpecsCommand(char* args)
     {
         target->resetTalents(true,true);
         target->SendTalentsInfoData(false);
+
         ChatHandler(target).SendSysMessage(LANG_RESET_TALENTS);
         if (!m_session || m_session->GetPlayer() != target)
             PSendSysMessage(LANG_RESET_TALENTS_ONLINE,GetNameLink(target).c_str());
@@ -6209,7 +6189,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
     UnitStateMgr& statemgr = unit->GetUnitStateMgr();
 
     float x,y,z;
-    for (int32 i = UNIT_ACTION_PRIORITY_NONE; i != UNIT_ACTION_PRIORITY_END; ++i)
+    for (int32 i = UNIT_ACTION_PRIORITY_IDLE; i != UNIT_ACTION_PRIORITY_END; ++i)
     {
         ActionInfo* actionInfo = statemgr.GetAction(UnitActionPriority(i));
         if (!actionInfo)
@@ -6230,6 +6210,7 @@ bool ChatHandler::HandleMovegensCommand(char* /*args*/)
             case DISTRACT_MOTION_TYPE:
             case EFFECT_MOTION_TYPE:
                 break;
+
             case CHASE_MOTION_TYPE:
             {
                 Unit* target = NULL;
@@ -6610,7 +6591,7 @@ bool ChatHandler::HandleInstanceUnbindCommand(char* args)
                 ++itr;
                 continue;
             }
-            if(itr->first != player->GetMapId())
+            if (itr->first != player->GetMapId())
             {
                 DungeonPersistentState *save = itr->second.state;
                 std::string timeleft = secsToTimeString(save->GetResetTime() - time(NULL), true);
@@ -6631,6 +6612,7 @@ bool ChatHandler::HandleInstanceUnbindCommand(char* args)
         }
     }
     PSendSysMessage("instances unbound: %d", counter);
+
     return true;
 }
 

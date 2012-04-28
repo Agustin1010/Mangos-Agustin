@@ -424,7 +424,7 @@ void WorldSession::HandleLootRoll( WorldPacket &recv_data )
     ObjectGuid lootedTarget;
     uint32 itemSlot;
     uint8  rollType;
-    recv_data >> lootedTarget;                                  //guid of the item rolled
+    recv_data >> lootedTarget;                              //guid of the item rolled
     recv_data >> itemSlot;
     recv_data >> rollType;
 
@@ -844,8 +844,8 @@ void WorldSession::HandleRequestPartyMemberStatsOpcode( WorldPacket &recv_data )
     ObjectGuid guid;
     recv_data >> guid;
 
-    Player * player = HashMapHolder<Player>::Find(guid);
-    if(!player)
+    Player* player = ObjectAccessor::FindPlayer(guid, false);
+    if (!player)
     {
         WorldPacket data(SMSG_PARTY_MEMBER_STATS_FULL, 3+4+2);
         data << uint8(0);                                   // only for SMSG_PARTY_MEMBER_STATS_FULL, probably arena/bg related

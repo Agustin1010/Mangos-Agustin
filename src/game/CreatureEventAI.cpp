@@ -117,8 +117,6 @@ CreatureEventAI::CreatureEventAI(Creature *c ) : CreatureAI(c)
 
     m_bEmptyList = m_CreatureEventAIList.empty();
     m_Phase = 0;
-    m_CombatMovementEnabled = true;
-    m_MeleeEnabled = true;
     m_AttackDistance = 0.0f;
     m_AttackAngle = 0.0f;
 
@@ -869,6 +867,9 @@ void CreatureEventAI::Reset()
     m_EventUpdateTime = EVENT_UPDATE_TIME;
     m_EventDiff = 0;
 
+    m_CombatMovementEnabled = true;
+    m_MeleeEnabled = true;
+
     if (m_bEmptyList)
         return;
 
@@ -1400,7 +1401,7 @@ void CreatureEventAI::ReceiveEmote(Player* pPlayer, uint32 text_emote)
             if ((*itr).Event.receive_emote.emoteId != text_emote)
                 return;
 
-            PlayerCondition pcon((*itr).Event.receive_emote.condition,(*itr).Event.receive_emote.conditionValue1,(*itr).Event.receive_emote.conditionValue2);
+            PlayerCondition pcon(0, (*itr).Event.receive_emote.condition,(*itr).Event.receive_emote.conditionValue1,(*itr).Event.receive_emote.conditionValue2);
             if (pcon.Meets(pPlayer))
             {
                 DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "CreatureEventAI: ReceiveEmote CreatureEventAI: Condition ok, processing");

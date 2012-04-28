@@ -301,7 +301,6 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
         return;
 
     GameObject *obj = GetPlayer()->GetMap()->GetGameObject(guid);
-
     if(!obj)
         return;
 
@@ -489,7 +488,7 @@ void WorldSession::HandleCancelAuraOpcode( WorldPacket& recvPacket)
     if (!spellInfo)
         return;
 
-    if (spellInfo->Attributes & SPELL_ATTR_CANT_CANCEL)
+    if (spellInfo->HasAttribute(SPELL_ATTR_CANT_CANCEL))
         return;
 
     if (IsPassiveSpell(spellInfo))
@@ -621,7 +620,12 @@ void WorldSession::HandleTotemDestroyed( WorldPacket& recvPacket)
         return;
 
     if (Totem* totem = GetPlayer()->GetTotem(TotemSlot(slotId)))
+    {
+        if(totem->GetEntry() == SENTRY_TOTEM_ENTRY)
+            return;
+
         totem->UnSummon();
+    }
 }
 
 void WorldSession::HandleSelfResOpcode( WorldPacket & /*recv_data*/ )
