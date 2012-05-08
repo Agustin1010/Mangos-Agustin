@@ -1,11 +1,12 @@
 Parches Metidos:
 
-- Traducciones
-- Correcciones en las traducciones
+- Traducciones: esES y esMX
+- Correcciones en las traducciones: esES y esMX
 - Añadidas a la BG´s aleatoria: Playa de Ancestros y Isla de Conquita
 - Fix para spell_hacks
-- Añadias mas traducciones por codigo
+- Añadias mas traducciones por codigo (Gossip)
 - Añadido un AutoBan por Dupeo de item (no mercy hackers)
 - Añadida la carpeta sql_als para mis parches
 - Añadido el fichero revision_ALS.h
 - Implementada la Armeria
+- Fix para corregir los nombres de algunos item´s en las traducciones: esES y esMX
