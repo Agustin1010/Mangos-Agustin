@@ -15653,14 +15653,16 @@ void Player::AreaExploredOrEventHappens( uint32 questId )
 //not used in mangosd, function for external script library
 void Player::GroupEventHappens( uint32 questId, WorldObject const* pEventObject )
 {
-    if ( Group *pGroup = GetGroup() )
+    if (Group* pGroup = GetGroup())
     {
-        for(GroupReference *itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
         {
-            Player *pGroupGuy = itr->getSource();
+            Player* pGroupGuy = itr->getSource();
+            if (!pGroupGuy)
+                continue;
 
             // for any leave or dead (with not released body) group member at appropriate distance
-            if ( pGroupGuy && pGroupGuy->IsAtGroupRewardDistance(pEventObject) && !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) )
+            if (pGroupGuy->IsAtGroupRewardDistance(pEventObject) && !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
                 pGroupGuy->AreaExploredOrEventHappens(questId);
         }
     }
@@ -16532,39 +16534,39 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder *holder )
 
         player_at_bg = currentBg && currentBg->IsPlayerInBattleGround(GetObjectGuid());
 
-        if (player_at_bg)
+        if (player_at_bg && currentBg->GetStatus() != STATUS_WAIT_LEAVE)
         {
-            if (currentBg->GetStatus() != STATUS_WAIT_LEAVE)
-            {
-                BattleGroundQueueTypeId bgQueueTypeId = BattleGroundMgr::BGQueueTypeId(currentBg->GetTypeID(), currentBg->GetArenaType());
-                AddBattleGroundQueueId(bgQueueTypeId);
+            BattleGroundQueueTypeId bgQueueTypeId = BattleGroundMgr::BGQueueTypeId(currentBg->GetTypeID(), currentBg->GetArenaType());
+            AddBattleGroundQueueId(bgQueueTypeId);
 
-                m_bgData.bgTypeID = currentBg->GetTypeID();     // bg data not marked as modified
+            m_bgData.bgTypeID = currentBg->GetTypeID();     // bg data not marked as modified
 
-                //join player to battleground group
-                currentBg->EventPlayerLoggedIn(this, GetObjectGuid());
-                currentBg->AddOrSetPlayerToCorrectBgGroup(this, GetObjectGuid(), m_bgData.bgTeam);
+            //join player to battleground group
+            currentBg->EventPlayerLoggedIn(this, GetObjectGuid());
+            currentBg->AddOrSetPlayerToCorrectBgGroup(this, GetObjectGuid(), m_bgData.bgTeam);
 
-                SetInviteForBattleGroundQueueType(bgQueueTypeId,currentBg->GetInstanceID());
+            SetInviteForBattleGroundQueueType(bgQueueTypeId,currentBg->GetInstanceID());
 
-                SetLocationMapId(savedLocation.mapid);
-                Relocate(savedLocation.coord_x, savedLocation.coord_y, savedLocation.coord_z, savedLocation.orientation);
-            }
-            else
+            SetLocationMapId(savedLocation.mapid);
+            Relocate(savedLocation.coord_x, savedLocation.coord_y, savedLocation.coord_z, savedLocation.orientation);
+        }
+        else
+        {
+            if (player_at_bg) // if player at bg and bg status is STATUS_WAIT_LEAVE
             {
                 currentBg->RemovePlayerAtLeave(GetObjectGuid(), false, true);
                 player_at_bg = false;
-
-                // move to bg enter point
-                const WorldLocation& _loc = GetBattleGroundEntryPoint();
-                SetLocationMapId(_loc.mapid);
-                Relocate(_loc.coord_x, _loc.coord_y, _loc.coord_z, _loc.orientation);
-
-                // We are not in BG anymore
-                SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
-                // remove outdated DB data in DB
-                _SaveBGData(true);
             }
+
+            // move to bg enter point
+            const WorldLocation& _loc = GetBattleGroundEntryPoint();
+            SetLocationMapId(_loc.mapid);
+            Relocate(_loc.coord_x, _loc.coord_y, _loc.coord_z, _loc.orientation);
+
+            // We are not in BG anymore
+            SetBattleGroundId(0, BATTLEGROUND_TYPE_NONE);
+            // remove outdated DB data in DB
+            _SaveBGData(true);
         }
     }
     else
@@ -22301,22 +22303,25 @@ void Player::RewardSinglePlayerAtKill(Unit* pVictim)
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GET_KILLING_BLOWS, 1, 0, pVictim);
 
     // xp and reputation only in !PvP case
-    if(!PvP)
+    if (!PvP)
     {
-        RewardReputation(pVictim,1);
+        RewardReputation(pVictim, 1.0f);
         GiveXP(xp, pVictim);
 
         if (Pet* pet = GetPet())
             pet->GivePetXP(xp);
 
         // normal creature (not pet/etc) can be only in !PvP case
-        if (pVictim->GetTypeId()==TYPEID_UNIT)
+        if (pVictim->GetTypeId() == TYPEID_UNIT)
+        {
             if (CreatureInfo const* normalInfo = ObjectMgr::GetCreatureTemplate(pVictim->GetEntry()))
             {
                 KilledMonster(normalInfo, pVictim->GetObjectGuid());
-                if(uint32 normalType = normalInfo->type)
+
+                if (uint32 normalType = normalInfo->type)
                     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE, normalType, xp);
             }
+        }
     }
 }
 
@@ -22325,9 +22330,9 @@ void Player::RewardPlayerAndGroupAtEvent(uint32 creature_id, WorldObject* pRewar
     ObjectGuid creature_guid = pRewardSource && pRewardSource->GetTypeId() == TYPEID_UNIT ? pRewardSource->GetObjectGuid() : ObjectGuid();
 
     // prepare data for near group iteration
-    if (Group *pGroup = GetGroup())
+    if (Group* pGroup = GetGroup())
     {
-        for (GroupReference *itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
         {
             Player* pGroupGuy = itr->getSource();
             if (!pGroupGuy)
@@ -22337,7 +22342,7 @@ void Player::RewardPlayerAndGroupAtEvent(uint32 creature_id, WorldObject* pRewar
                 continue;                               // member (alive or dead) or his corpse at req. distance
 
             // quest objectives updated only for alive group member or dead but with not released body
-            if (pGroupGuy->isAlive()|| !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            if (pGroupGuy->isAlive() || !pGroupGuy->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
                 pGroupGuy->KilledMonsterCredit(creature_id, creature_guid);
         }
     }
@@ -22348,15 +22353,15 @@ void Player::RewardPlayerAndGroupAtEvent(uint32 creature_id, WorldObject* pRewar
 void Player::RewardPlayerAndGroupAtCast(WorldObject* pRewardSource, uint32 spellid)
 {
     // prepare data for near group iteration
-    if (Group *pGroup = GetGroup())
+    if (Group* pGroup = GetGroup())
     {
-        for(GroupReference *itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != NULL; itr = itr->next())
         {
             Player* pGroupGuy = itr->getSource();
-            if(!pGroupGuy)
+            if (!pGroupGuy)
                 continue;
 
-            if(!pGroupGuy->IsAtGroupRewardDistance(pRewardSource))
+            if (!pGroupGuy->IsAtGroupRewardDistance(pRewardSource))
                 continue;                               // member (alive or dead) or his corpse at req. distance
 
             // quest objectives updated only for alive group member or dead but with not released body
@@ -22370,7 +22375,11 @@ void Player::RewardPlayerAndGroupAtCast(WorldObject* pRewardSource, uint32 spell
 
 bool Player::IsAtGroupRewardDistance(WorldObject const* pRewardSource) const
 {
-    if (pRewardSource->IsWithinDistInMap(this,sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE)))
+
+    if (!pRewardSource)
+        return false;
+
+    if (pRewardSource->IsWithinDistInMap(this, sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE)))
         return true;
 
     if (isAlive())
@@ -22380,7 +22389,7 @@ bool Player::IsAtGroupRewardDistance(WorldObject const* pRewardSource) const
     if (!corpse)
         return false;
 
-    return pRewardSource->IsWithinDistInMap(corpse,sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE));
+    return pRewardSource->IsWithinDistInMap(corpse, sWorld.getConfig(CONFIG_FLOAT_GROUP_XP_DISTANCE));
 }
 
 uint32 Player::GetBaseWeaponSkillValue (WeaponAttackType attType) const
