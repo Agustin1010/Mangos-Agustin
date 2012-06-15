@@ -1579,18 +1579,11 @@ void Unit::CalculateSpellDamage(DamageInfo* damageInfo, float DamageMultiplier)
                                                 damageInfo->target->GetMeleeCritDamageReduction(reduction_affected_damage) :
                                                 damageInfo->target->GetRangedCritDamageReduction(reduction_affected_damage);
 
-                uint32 damageRegularReduction = damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
-                damageInfo->damage -= std::max(damageCritReduction,damageRegularReduction);
+                damageInfo->damage -= damageCritReduction;
             }
             else
             {
-                damageInfo->HitInfo &=  ~SPELL_HIT_TYPE_CRIT;
-
-                // Resilience - reduce regular damage (full or reduced)
-                uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILENCE_ALTERNATIVE_CALCULATION) ?
-                                                   damageInfo->damage :
-                                                   CalcNotIgnoreDamageReduction(damageInfo);
-                damageInfo->damage -= damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
+                damageInfo->HitInfo &= ~SPELL_HIT_TYPE_CRIT;
             }
             break;
         }
@@ -1615,19 +1608,11 @@ void Unit::CalculateSpellDamage(DamageInfo* damageInfo, float DamageMultiplier)
                                                    damageInfo->damage :
                                                    CalcNotIgnoreDamageReduction(damageInfo);
 
-                uint32 damageCritReduction    = damageInfo->target->GetSpellCritDamageReduction(reduction_affected_damage);
-                uint32 damageRegularReduction = damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
-                damageInfo->damage -= std::max(damageCritReduction,damageRegularReduction);
+                damageInfo->damage -= damageInfo->target->GetSpellCritDamageReduction(reduction_affected_damage);
             }
             else
             {
                 damageInfo->HitInfo &= ~SPELL_HIT_TYPE_CRIT;
-
-                // Resilience - reduce regular damage (full or reduced)
-                uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILENCE_ALTERNATIVE_CALCULATION) ?
-                                                   damageInfo->damage :
-                                                   CalcNotIgnoreDamageReduction(damageInfo);
-                damageInfo->damage -= damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
             }
             break;
         }
@@ -1635,6 +1620,12 @@ void Unit::CalculateSpellDamage(DamageInfo* damageInfo, float DamageMultiplier)
             sLog.outError("Unit::CalculateSpellDamage unknown damage class by caster: %s, spell %u", GetObjectGuid().GetString().c_str(), damageInfo->m_spellInfo->Id);
             return;
     }
+
+    // Resilience - reduce regular damage (full or reduced)
+    uint32 reduction_affected_damage = sWorld.getConfig(CONFIG_BOOL_RESILENCE_ALTERNATIVE_CALCULATION) ?
+                                       damageInfo->damage :
+                                       CalcNotIgnoreDamageReduction(damageInfo);
+    damageInfo->damage -= damageInfo->target->GetSpellDamageReduction(reduction_affected_damage);
 
     // damage mitigation
     if (damageInfo->damage > 0)
@@ -2931,7 +2922,7 @@ void Unit::AttackerStateUpdate (Unit *pVictim, WeaponAttackType attType, bool ex
     // attack can be redirected to another target
     pVictim = SelectMagnetTarget(pVictim);
 
-    DamageInfo damageInfo = DamageInfo(this, pVictim);
+    DamageInfo damageInfo = DamageInfo(this, pVictim, uint32(0),0);
     damageInfo.attackType       = attType;
 
     CalculateMeleeDamage(&damageInfo);
@@ -5644,11 +5635,11 @@ void Unit::HandleArenaPreparation(bool apply)
         // and auras, which have SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA (former SPELL_ATTR_EX5_UNK2 = 0x00000004).
         for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
         {
-            if (!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_UNK21) &&
+            if ((!iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_UNK21) &&
                                                                 // don't remove stances, shadowform, pally/hunter auras
                 !iter->second->IsPassive() &&                   // don't remove passive auras
                 (iter->second->GetAuraMaxDuration() > 0 &&
-                iter->second->GetAuraDuration() <= sWorld.getConfig(CONFIG_UINT32_ARENA_AURAS_DURATION) * IN_MILLISECONDS) ||
+                iter->second->GetAuraDuration() <= sWorld.getConfig(CONFIG_UINT32_ARENA_AURAS_DURATION) * IN_MILLISECONDS)) ||
                 iter->second->GetSpellProto()->HasAttribute(SPELL_ATTR_EX5_REMOVE_AT_ENTER_ARENA))
             {
                 RemoveSpellAuraHolder(iter->second, AURA_REMOVE_BY_CANCEL);
@@ -6123,8 +6114,7 @@ void Unit::SendSpellNonMeleeDamageLog(DamageInfo *log)
 
 void Unit::SendSpellNonMeleeDamageLog(Unit *target, uint32 SpellID, uint32 Damage, SpellSchoolMask damageSchoolMask, uint32 AbsorbedDamage, uint32 Resist, bool PhysicalDamage, uint32 Blocked, bool CriticalHit)
 {
-    DamageInfo log(this, target, SpellID);
-    log.damage = Damage - AbsorbedDamage - Resist - Blocked;
+    DamageInfo log(this, target, SpellID,(Damage - AbsorbedDamage - Resist - Blocked));
     log.absorb = AbsorbedDamage;
     log.resist = Resist;
     log.physicalLog = PhysicalDamage;
@@ -13679,10 +13669,14 @@ void DamageInfo::Reset(uint32 _damage)
         SpellID = m_spellInfo->Id;
 
     damage        = _damage;
+    baseDamage    = _damage;
     cleanDamage   = 0;
     absorb        = 0;
     resist        = 0;
     blocked       = 0;
+    reduction     = 0;
+    bonusDone     = 0;
+    bonusTaken    = 0;
     unused        = false;
     HitInfo       = HITINFO_NORMALSWING;
     TargetState   = VICTIMSTATE_UNAFFECTED;
