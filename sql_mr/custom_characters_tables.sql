@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS `item_soulbound_trade_data` (
     PRIMARY KEY (`itemGuid`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=FIXED COMMENT='BOP item trade cache';
 
--- Wow Armory
+-- WoW Armory
 
 DROP TABLE IF EXISTS `armory_character_stats`;
 CREATE TABLE `armory_character_stats` (
